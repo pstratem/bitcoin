@@ -35,6 +35,11 @@ const char *FILTERCLEAR="filterclear";
 const char *REJECT="reject";
 const char *SENDHEADERS="sendheaders";
 const char *FEEFILTER="feefilter";
+const char *SENDCOMPR="sendcompr";
+const char *STOPCOMPR="stopcompr";
+const char *COMPRBLOCK="comprblock";
+const char *GETBLOCKTXN="getblocktxn";
+const char *BLOCKTXN="blocktxn";
 };
 
 static const char* ppszTypeName[] =
@@ -70,7 +75,12 @@ const static std::string allNetMessageTypes[] = {
     NetMsgType::FILTERCLEAR,
     NetMsgType::REJECT,
     NetMsgType::SENDHEADERS,
-    NetMsgType::FEEFILTER
+    NetMsgType::FEEFILTER,
+    NetMsgType::SENDCOMPR,
+    NetMsgType::STOPCOMPR,
+    NetMsgType::COMPRBLOCK,
+    NetMsgType::GETBLOCKTXN,
+    NetMsgType::BLOCKTXN,
 };
 const static std::vector<std::string> allNetMessageTypesVec(allNetMessageTypes, allNetMessageTypes+ARRAYLEN(allNetMessageTypes));
 

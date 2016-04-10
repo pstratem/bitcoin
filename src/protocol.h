@@ -217,6 +217,38 @@ extern const char *SENDHEADERS;
  * @since protocol version 70013 as described by BIP133
  */
 extern const char *FEEFILTER;
+/**
+ * Indicates that a node prefers to receive new block announcements via a
+ * "comprblock" message rather than an "inv".
+ * Implies "sendheaders".
+ * @since protocol version 70014 as described by BIP TODO
+ */
+extern const char *SENDCOMPR;
+/**
+ * Indicates that a node prefers to receive new block announcements via a
+ * "headers" message rather than an "inv".
+ * Implies "sendheaders".
+ * @since protocol version 70014 as described by BIP TODO
+ */
+extern const char *STOPCOMPR;
+/**
+ * Contains a CBlockHeaderAndShortTxIDs object - providing a header and
+ * list of "short txids".
+ * @since protocol version 70014 as described by BIP TODO
+ */
+extern const char *COMPRBLOCK;
+/**
+ * Contains a blockhash and list of tx indicies which are being requested
+ * Peer should respond with "blocktxn" message.
+ * @since protocol version 70014 as described by BIP TODO
+ */
+extern const char *GETBLOCKTXN;
+/**
+ * Contains a blockhash and list of txn which have been requested in a
+ * "getblocktxn" message.
+ * @since protocol version 70014 as described by BIP TODO
+ */
+extern const char *BLOCKTXN;
 };
 
 /* Get a vector of all valid message types (see above) */
