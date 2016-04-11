@@ -87,6 +87,7 @@ private:
     unsigned int sigOpCount;   //!< Legacy sig ops plus P2SH sig op count
     int64_t feeDelta;          //!< Used for determining the priority of the transaction for mining in a block
     LockPoints lockPoints;     //!< Track the height and time at which tx was final
+    mutable int32_t refCount;  //!< Track how much external stuff wants us to keep this tx in memory
 
     // Information about descendants of this transaction that are in the
     // mempool; if we remove this transaction we must remove all of these
@@ -146,6 +147,13 @@ public:
     uint64_t GetSizeWithAncestors() const { return nSizeWithAncestors; }
     CAmount GetModFeesWithAncestors() const { return nModFeesWithAncestors; }
     unsigned int GetSigOpCountWithAncestors() const { return nSigOpCountWithAncestors; }
+
+    void AddRef() const { refCount++; }
+    void Release() const { refCount--; assert(refCount >= 0); }
+    int32_t GetRefCount() const { return refCount; }
+
+    // Only used when adding an entry which was previously hidden away with a refcount
+    void SetRef(int32_t refCountIn) const { assert(refCount == 0); refCount = refCountIn; }
 };
 
 // Helpers for modifying CTxMemPool::mapTx, which is a boost multi_index.
@@ -476,6 +484,14 @@ private:
     void UpdateParent(txiter entry, txiter parent, bool add);
     void UpdateChild(txiter entry, txiter child, bool add);
 
+    /** When CTxEntrys are removed while they still have external references,
+     *  we are required to keep them around, but dont want them in mapTx,
+     *  so we put them here, keeping only the CTransaction and refcount.
+     *  This deliberately doesn't count towards our in-memory calculated size,
+     *  as these are considered memory owned by others.
+     */
+    std::map<uint256, std::pair<CTransaction, int32_t> > mapLockedEntries;
+
 public:
     std::map<COutPoint, CInPoint> mapNextTx;
     std::map<uint256, std::pair<double, CAmount> > mapDeltas;
@@ -599,8 +615,10 @@ public:
         return (mapTx.count(hash) != 0);
     }
 
-    bool lookup(uint256 hash, CTransaction& result) const;
+    bool lookup(uint256 hash, CTransaction& result, bool includeLockedRemovedTxn = false) const;
     bool lookupFeeRate(const uint256& hash, CFeeRate& feeRate) const;
+
+    void ReleaseTxLock(const uint256& hash);
 
     /** Estimate fee rate needed to get into the next nBlocks
      *  If no answer can be given at nBlocks, return an estimate

@@ -25,7 +25,7 @@ CTxMemPoolEntry::CTxMemPoolEntry(const CTransaction& _tx, const CAmount& _nFee,
                                  bool _spendsCoinbase, unsigned int _sigOps, LockPoints lp):
     tx(_tx), nFee(_nFee), nTime(_nTime), entryPriority(_entryPriority), entryHeight(_entryHeight),
     hadNoDependencies(poolHasNoInputsOf), inChainInputValue(_inChainInputValue),
-    spendsCoinbase(_spendsCoinbase), sigOpCount(_sigOps), lockPoints(lp)
+    spendsCoinbase(_spendsCoinbase), sigOpCount(_sigOps), lockPoints(lp), refCount(0)
 {
     nTxSize = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
     nModSize = tx.CalculateModifiedSize(nTxSize);
@@ -395,6 +395,12 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry &entry,
     indexed_transaction_set::iterator newit = mapTx.insert(entry).first;
     mapLinks.insert(make_pair(newit, TxLinks()));
 
+    std::map<uint256, std::pair<CTransaction, int32_t> >::iterator lockedEntryIt = mapLockedEntries.find(hash);
+    if (lockedEntryIt != mapLockedEntries.end()) {
+        newit->SetRef(lockedEntryIt->second.second);
+        mapLockedEntries.erase(lockedEntryIt);
+    }
+
     // Update transaction for any feeDelta created by PrioritiseTransaction
     // TODO: refactor so that the fee delta is calculated before inserting
     // into mapTx.
@@ -451,6 +457,9 @@ void CTxMemPool::removeUnchecked(txiter it)
     cachedInnerUsage -= it->DynamicMemoryUsage();
     cachedInnerUsage -= memusage::DynamicUsage(mapLinks[it].parents) + memusage::DynamicUsage(mapLinks[it].children);
     mapLinks.erase(it);
+    if (it->GetRefCount())
+        assert(mapLockedEntries.insert(std::make_pair(it->GetTx().GetHash(),
+                                       std::make_pair(it->GetTx(), it->GetRefCount()))).second);
     mapTx.erase(it);
     nTransactionsUpdated++;
     minerPolicyEstimator->removeTx(hash);
@@ -762,11 +771,20 @@ void CTxMemPool::queryHashes(vector<uint256>& vtxid)
         vtxid.push_back(mi->GetTx().GetHash());
 }
 
-bool CTxMemPool::lookup(uint256 hash, CTransaction& result) const
+bool CTxMemPool::lookup(uint256 hash, CTransaction& result, bool includeLockedRemovedTxn) const
 {
     LOCK(cs);
     indexed_transaction_set::const_iterator i = mapTx.find(hash);
-    if (i == mapTx.end()) return false;
+    if (i == mapTx.end()) {
+        if (includeLockedRemovedTxn) {
+            map<uint256, pair<CTransaction, int32_t> >::const_iterator it = mapLockedEntries.find(hash);
+            if (it == mapLockedEntries.end())
+                return false;
+            result = it->second.first;
+            return true;
+        }
+        return false;
+    }
     result = i->GetTx();
     return true;
 }
@@ -779,6 +797,23 @@ bool CTxMemPool::lookupFeeRate(const uint256& hash, CFeeRate& feeRate) const
         return false;
     feeRate = CFeeRate(i->GetFee(), i->GetTxSize());
     return true;
+}
+
+
+void CTxMemPool::ReleaseTxLock(const uint256& hash)
+{
+    LOCK(cs);
+    indexed_transaction_set::const_iterator i = mapTx.find(hash);
+    if (i == mapTx.end()) {
+        map<uint256, pair<CTransaction, int32_t> >::iterator it = mapLockedEntries.find(hash);
+        assert(it != mapLockedEntries.end());
+        it->second.second--;
+        if (it->second.second <= 0) {
+            assert(it->second.second == 0);
+            mapLockedEntries.erase(it);
+        }
+    }
+    i->Release();
 }
 
 CFeeRate CTxMemPool::estimateFee(int nBlocks) const
