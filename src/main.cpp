@@ -265,6 +265,8 @@ struct CNodeState {
     bool fPreferredDownload;
     //! Whether this peer wants invs or headers (when possible) for block announcements.
     bool fPreferHeaders;
+    //! Whether this peer wants invs or comprblocks (when possible) for block announcements.
+    bool fPreferHeaderAndIDs;
 
     CNodeState() {
         fCurrentlyConnected = false;
@@ -281,6 +283,7 @@ struct CNodeState {
         nBlocksInFlightValidHeaders = 0;
         fPreferredDownload = false;
         fPreferHeaders = false;
+        fPreferHeaderAndIDs = false;
     }
 };
 
@@ -4739,6 +4742,20 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         State(pfrom->GetId())->fPreferHeaders = true;
     }
 
+    else if (strCommand == NetMsgType::SENDCOMPR)
+    {
+        LOCK(cs_main);
+        State(pfrom->GetId())->fPreferHeaders = true;
+        State(pfrom->GetId())->fPreferHeaderAndIDs = true;
+    }
+
+    else if (strCommand == NetMsgType::STOPCOMPR)
+    {
+        LOCK(cs_main);
+        State(pfrom->GetId())->fPreferHeaders = true;
+        State(pfrom->GetId())->fPreferHeaderAndIDs = false;
+    }
+
 
     else if (strCommand == NetMsgType::INV)
     {
@@ -4877,6 +4894,35 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 break;
             }
         }
+    }
+
+
+    else if (strCommand == NetMsgType::GETBLOCKTXN)
+    {
+        BlockTransactionsRequest req;
+        vRecv >> req;
+
+        BlockMap::iterator it = mapBlockIndex.find(req.blockhash);
+        if (it == mapBlockIndex.end() || !(it->second->nStatus & BLOCK_HAVE_DATA)) {
+            Misbehaving(pfrom->GetId(), 100);
+            return error("Peer %d sent us a getblocktxn for a block we don't have", pfrom->id);
+        }
+
+        if (it->second->nHeight < chainActive.Height() - 10)
+            return error("Peer %d sent us a getblocktxn for a block > 10 deep", pfrom->id);
+
+        CBlock block;
+        assert(ReadBlockFromDisk(block, it->second, chainparams.GetConsensus()));
+
+        BlockTransactions resp(req);
+        for (size_t i = 0; i < req.indexes.size(); i++) {
+            if (req.indexes[i] >= block.vtx.size()) {
+                Misbehaving(pfrom->GetId(), 100);
+                return error("Peer %d sent us a getblocktxn with out-of-bounds tx indicies", pfrom->id);
+            }
+            resp.txn[i] = block.vtx[req.indexes[i]];
+        }
+        pfrom->PushMessage(NetMsgType::BLOCKTXN, resp);
     }
 
 
@@ -5786,17 +5832,30 @@ bool SendMessages(CNode* pto)
                     }
                 }
             } else if (!vHeaders.empty()) {
-                if (vHeaders.size() > 1) {
-                    LogPrint("net", "%s: %u headers, range (%s, %s), to peer=%d\n", __func__,
-                            vHeaders.size(),
-                            vHeaders.front().GetHash().ToString(),
-                            vHeaders.back().GetHash().ToString(), pto->id);
-                } else {
-                    LogPrint("net", "%s: sending header %s to peer=%d\n", __func__,
+                if (vHeaders.size() == 1 && state.fPreferHeaderAndIDs) {
+                    // We only send up to 1 block as header-and-ids, as otherwise
+                    // probably means we're doing an initial-ish-sync or they're slow
+                    LogPrint("net", "%s sending header-and-ids %s to peer %d\n", __func__,
                             vHeaders.front().GetHash().ToString(), pto->id);
+                    //TODO: Shouldn't need to reload block from disk, but requires refactor
+                    CBlock block;
+                    assert(ReadBlockFromDisk(block, pBestIndex, consensusParams));
+                    CBlockHeaderAndShortTxIDs comprblock(block);
+                    pto->PushMessage(NetMsgType::COMPRBLOCK, comprblock);
+                    state.pindexBestHeaderSent = pBestIndex;
+                } else {
+                    if (vHeaders.size() > 1) {
+                        LogPrint("net", "%s: %u headers, range (%s, %s), to peer=%d\n", __func__,
+                                vHeaders.size(),
+                                vHeaders.front().GetHash().ToString(),
+                                vHeaders.back().GetHash().ToString(), pto->id);
+                    } else {
+                        LogPrint("net", "%s: sending header %s to peer=%d\n", __func__,
+                                vHeaders.front().GetHash().ToString(), pto->id);
+                    }
+                    pto->PushMessage(NetMsgType::HEADERS, vHeaders);
+                    state.pindexBestHeaderSent = pBestIndex;
                 }
-                pto->PushMessage(NetMsgType::HEADERS, vHeaders);
-                state.pindexBestHeaderSent = pBestIndex;
             }
             pto->vBlockHashesToAnnounce.clear();
         }
