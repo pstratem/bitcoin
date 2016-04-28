@@ -7,16 +7,20 @@
 #endif
 
 #include "consensus/merkle.h"
+#include "consensus/validation.h"
 #include "primitives/block.h"
 #include "script/script.h"
 #include "addrman.h"
+#include "blockencodings.h"
 #include "chain.h"
 #include "coins.h"
 #include "compressor.h"
+#include "main.h"
 #include "net.h"
 #include "protocol.h"
 #include "streams.h"
 #include "undo.h"
+#include "validationinterface.h"
 #include "version.h"
 
 #include <stdint.h>
@@ -44,6 +48,11 @@ enum TEST_ID {
     CBLOOMFILTER_DESERIALIZE,
     CDISKBLOCKINDEX_DESERIALIZE,
     CTXOUTCOMPRESSOR_DESERIALIZE,
+    TRANSACTIONCOMPRESSOR_DESERIALIZE,
+    BLOCKTRANSACTIONSREQUEST_DESERIALIZE,
+    BLOCKTRANSACTIONS_DESERIALIZE,
+    PREFILLEDTRANSACTION_DESERIALIZE,
+    CHECKBLOCK,
     TEST_ID_END
 };
 
@@ -245,6 +254,54 @@ int main(int argc, char **argv)
             } catch (const std::ios_base::failure& e) {return 0;}
             
             CTxOutCompressor toc(to);
+            break;
+        }
+        case TRANSACTIONCOMPRESSOR_DESERIALIZE:
+        {
+            CTransaction tx;
+            try
+            {
+                ds >> tx;
+            } catch (const std::ios_base::failure& e) {return 0;}
+            TransactionCompressor tc(tx);
+            break;
+        }
+        case BLOCKTRANSACTIONSREQUEST_DESERIALIZE:
+        {
+            try
+            {
+                BlockTransactionsRequest btr;
+                ds >> btr;
+            } catch (const std::ios_base::failure& e) {return 0;}
+            break;
+        }
+        case BLOCKTRANSACTIONS_DESERIALIZE:
+        {
+            try
+            {
+                BlockTransactions bt;
+                ds >> bt;
+            } catch (const std::ios_base::failure& e) {return 0;}
+            break;
+        }
+        case PREFILLEDTRANSACTION_DESERIALIZE:
+        {
+            try
+            {
+                PrefilledTransaction pt;
+                ds >> pt;
+            } catch (const std::ios_base::failure& e) {return 0;}
+            break;
+        }
+        case CHECKBLOCK:
+        {
+            try
+            {
+                CBlock block;
+                ds >> block;
+                CValidationState state;
+                if (!CheckBlock(block, state, false, false)) {return 0;}
+            } catch (const std::ios_base::failure& e) {return 0;}
             break;
         }
         default:
