@@ -300,7 +300,7 @@ int main(int argc, char **argv)
                 CBlock block;
                 ds >> block;
                 CValidationState state;
-                if (!CheckBlock(block, state, false, false)) {return 0;}
+//                if (!CheckBlock(block, state, false, false)) {return 0;}
             } catch (const std::ios_base::failure& e) {return 0;}
             break;
         }
