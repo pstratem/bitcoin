@@ -461,8 +461,9 @@ void CDBEnv::Flush(bool fShutdown)
                     dbenv->lsn_reset(strFile.c_str(), 0);
                 LogPrint("db", "CDBEnv::Flush: %s closed\n", strFile);
                 mapFileUseCount.erase(mi++);
-            } else
-                mi++;
+            } else {
+                assert(false);
+            }
         }
         LogPrint("db", "CDBEnv::Flush: Flush(%s)%s took %15dms\n", fShutdown ? "true" : "false", fDbEnvInit ? "" : " database not started", GetTimeMillis() - nStart);
         if (fShutdown) {
