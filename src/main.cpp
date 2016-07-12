@@ -2783,6 +2783,7 @@ static int64_t nTimeReadFromDisk = 0;
 static int64_t nTimeConnectTotal = 0;
 static int64_t nTimeFlush = 0;
 static int64_t nTimeChainState = 0;
+static int64_t nTimeRemoveForBlock = 0;
 static int64_t nTimePostConnect = 0;
 
 /**
@@ -2828,6 +2829,8 @@ bool static ConnectTip(CValidationState& state, const CChainParams& chainparams,
     // Remove conflicting transactions from the mempool.
     list<CTransaction> txConflicted;
     mempool.removeForBlock(pblock->vtx, pindexNew->nHeight, txConflicted, !IsInitialBlockDownload());
+    int64_t nTime6 = GetTimeMicros(); nTimeRemoveForBlock += nTime6 - nTime5;
+    LogPrint("bench", "  - Connect removeForBlock: %.2fms [%.2fs]\n", (nTime6 - nTime5) * 0.001, nTimeRemoveForBlock * 0.000001);
     // Update chainActive & related variables.
     UpdateTip(pindexNew, chainparams);
     // Tell wallet about transactions that went from mempool
@@ -2840,7 +2843,7 @@ bool static ConnectTip(CValidationState& state, const CChainParams& chainparams,
         SyncWithWallets(tx, pindexNew, pblock);
     }
 
-    int64_t nTime6 = GetTimeMicros(); nTimePostConnect += nTime6 - nTime5; nTimeTotal += nTime6 - nTime1;
+    int64_t nTime7 = GetTimeMicros(); nTimePostConnect += nTime7 - nTime5; nTimeTotal += nTime7 - nTime1;
     LogPrint("bench", "  - Connect postprocess: %.2fms [%.2fs]\n", (nTime6 - nTime5) * 0.001, nTimePostConnect * 0.000001);
     LogPrint("bench", "- Connect block: %.2fms [%.2fs]\n", (nTime6 - nTime1) * 0.001, nTimeTotal * 0.000001);
     return true;
