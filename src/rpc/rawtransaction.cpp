@@ -190,6 +190,73 @@ UniValue getrawtransaction(const JSONRPCRequest& request)
     return result;
 }
 
+UniValue getbloomfilter(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() != 1)
+        throw std::runtime_error(
+            "getbloomfilter blockhash\n"
+            "\nReturns a hex-encoded bloomfilter which matches against data elements in scriptPubKeys in the block.\n"
+            "\nArguments:\n"
+            "1. \"blockhash\"   (string) The block to process.\n"
+            "\nResult:\n"
+            "\"data\"           (string) A string that is a hex-encoded bloomfilter.\n"
+        );
+
+    uint256 hashBlock;
+    hashBlock = uint256S(request.params[0].get_str());
+
+    CBloomFilter filter;
+    {
+        LOCK(cs_main);
+
+        CBlockIndex* pblockindex = nullptr;
+        if (!mapBlockIndex.count(hashBlock))
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
+        pblockindex = mapBlockIndex[hashBlock];
+
+        CBlock block;
+        if(!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus()))
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "Can't read block from disk");
+
+        // count the number of elements to be inserted before constructing the bloom filter
+        // this way we get the optimal size filter
+        uint32_t nCount = 0;
+        for (const auto& tx : block.vtx)
+        {
+            // transaction id
+            nCount++;
+            for (unsigned int i = 0; i < tx->vout.size(); i++)
+            {
+                const CTxOut& txout = tx->vout[i];
+                std::vector<unsigned char> data(txout.scriptPubKey.begin(), txout.scriptPubKey.end());
+                if (data.size() != 0) {
+                    nCount++;
+                }
+            }
+        }
+
+        filter = CBloomFilter(nCount, 1.0/(1000 * 1000), 0, 0);
+        for (const auto& tx : block.vtx)
+        {
+            uint256 hash = tx->GetHash();
+            filter.insert(std::vector<unsigned char>(hash.begin(), hash.end()));
+            for (unsigned int i = 0; i < tx->vout.size(); i++)
+            {
+                const CTxOut& txout = tx->vout[i];
+                std::vector<unsigned char> data(txout.scriptPubKey.begin(), txout.scriptPubKey.end());
+                if (data.size() != 0) {
+                    filter.insert(data);
+                }
+            }
+        }
+    }
+
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << filter;
+    std::string strHex = HexStr(ss.begin(), ss.end());
+    return strHex;
+}
+
 UniValue gettxoutproof(const JSONRPCRequest& request)
 {
     if (request.fHelp || (request.params.size() != 1 && request.params.size() != 2))
@@ -1030,6 +1097,7 @@ static const CRPCCommand commands[] =
 
     { "blockchain",         "gettxoutproof",          &gettxoutproof,          {"txids", "blockhash"} },
     { "blockchain",         "verifytxoutproof",       &verifytxoutproof,       {"proof"} },
+    { "blockchain",         "getbloomfilter",         &getbloomfilter,         {"blockhash"} },
 };
 
 void RegisterRawTransactionRPCCommands(CRPCTable &t)
