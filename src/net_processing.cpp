@@ -1762,6 +1762,21 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
             connman->PushMessage(pfrom, msgMaker.Make(NetMsgType::SENDCMPCT, fAnnounceUsingCMPCTBLOCK, nCMPCTBLOCKVersion));
         }
         pfrom->fSuccessfullyConnected = true;
+
+        connman->PushMessage(pfrom, msgMaker.Make(NetMsgType::MEMPOOL));
+
+        auto vtxinfo = mempool.infoAll();
+        std::vector<CInv> vInv;
+
+        for (const auto& txinfo : vtxinfo) {
+            const uint256& hash = txinfo.tx->GetHash();
+            CInv inv(MSG_TX, hash);
+            vInv.push_back(inv);
+            if (vInv.size() == MAX_INV_SZ) {
+                connman->PushMessage(pfrom, msgMaker.Make(NetMsgType::INV, vInv));
+                vInv.clear();
+            }
+        }
     }
 
     else if (!pfrom->fSuccessfullyConnected)
