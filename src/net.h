@@ -336,6 +336,9 @@ private:
     void ThreadOpenConnections(std::vector<std::string> connect);
     void ThreadMessageHandler();
     void AcceptConnection(const ListenSocket& hListenSocket);
+
+    void DisconnectNodes();
+
     void ThreadSocketHandler();
     void ThreadDNSAddressSeed();
 
