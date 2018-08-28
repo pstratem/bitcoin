@@ -338,6 +338,7 @@ private:
     void AcceptConnection(const ListenSocket& hListenSocket);
 
     void DisconnectNodes();
+    void InactivityCheck();
 
     void ThreadSocketHandler();
     void ThreadDNSAddressSeed();
