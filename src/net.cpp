@@ -26,6 +26,10 @@
 #include <fcntl.h>
 #endif
 
+#ifndef WIN32
+#include <poll.h>
+#endif
+
 #ifdef USE_UPNP
 #include <miniupnpc/miniupnpc.h>
 #include <miniupnpc/miniwget.h>
@@ -1268,6 +1272,7 @@ void CConnman::InactivityCheck() {
     }
 }
 
+#ifdef WIN32
 void CConnman::ThreadSocketHandler() {
     while (!interruptNet)
     {
@@ -1477,6 +1482,212 @@ void CConnman::ThreadSocketHandler() {
         InactivityCheck();
     }
 }
+#else
+
+void poll_push_fd(std::vector<struct pollfd> &fds, int socket, short events) {
+    struct pollfd fd;
+    memset(&fd, 0, sizeof(fd));
+    fd.fd = socket;
+    fd.events = events;
+    fds.push_back(fd);
+}
+
+void CConnman::ThreadSocketHandler() {
+    while (!interruptNet)
+    {
+        //
+        // Disconnect nodes
+        //
+        DisconnectNodes();
+
+        //
+        // Find which sockets have data to receive
+        //
+        std::vector<struct pollfd> fds;
+        std::map<const ListenSocket*, struct pollfd*> mapListenSocketToPollfd;
+        std::map<CNode*, struct pollfd*> mapCNodeToPollfd;
+
+        for (const ListenSocket& hListenSocket : vhListenSocket) {
+            poll_push_fd(fds, hListenSocket.socket, POLLIN);
+            mapListenSocketToPollfd[&hListenSocket] = &fds.back();
+        }
+
+        {
+            LOCK(cs_vNodes);
+            for (CNode* pnode : vNodes)
+            {
+                // Implement the following logic:
+                // * If there is data to send, select() for sending data. As this only
+                //   happens when optimistic write failed, we choose to first drain the
+                //   write buffer in this case before receiving more. This avoids
+                //   needlessly queueing received data, if the remote peer is not themselves
+                //   receiving data. This means properly utilizing TCP flow control signalling.
+                // * Otherwise, if there is space left in the receive buffer, select() for
+                //   receiving data.
+                // * Hand off all complete messages to the processor, to be handled without
+                //   blocking here.
+
+                bool select_recv = !pnode->fPauseRecv;
+                bool select_send;
+                {
+                    LOCK(pnode->cs_vSend);
+                    select_send = !pnode->vSendMsg.empty();
+                }
+
+                LOCK(pnode->cs_hSocket);
+                if (pnode->hSocket == INVALID_SOCKET)
+                    continue;
+
+                if (select_send) {
+                    poll_push_fd(fds, pnode->hSocket, POLLOUT);
+                    mapCNodeToPollfd[pnode] = &fds.back();
+                    continue;
+                }
+                if (select_recv) {
+                    poll_push_fd(fds, pnode->hSocket, POLLIN);
+                    mapCNodeToPollfd[pnode] = &fds.back();
+                }
+            }
+        }
+
+        int nPoll = poll(&fds[0], fds.size(), 50);
+
+        if (interruptNet)
+            return;
+
+        if (nPoll == SOCKET_ERROR)
+        {
+            int nErr = WSAGetLastError();
+            LogPrintf("socket select error %s\n", NetworkErrorString(nErr));
+
+            if (!interruptNet.sleep_for(std::chrono::milliseconds(50)))
+                return;
+        }
+
+        //
+        // Accept new connections
+        //
+        for (const ListenSocket& hListenSocket : vhListenSocket)
+        {
+            if (hListenSocket.socket != INVALID_SOCKET && mapListenSocketToPollfd[&hListenSocket]->revents & POLLIN)
+            {
+                AcceptConnection(hListenSocket);
+            }
+        }
+
+        //
+        // Service each socket
+        //
+        std::vector<CNode*> vNodesCopy;
+        {
+            LOCK(cs_vNodes);
+            vNodesCopy = vNodes;
+            for (CNode* pnode : vNodesCopy)
+                pnode->AddRef();
+        }
+        for (CNode* pnode : vNodesCopy)
+        {
+            if (interruptNet)
+                return;
+
+            if (mapCNodeToPollfd.count(pnode) == 0)
+                continue;
+
+            //
+            // Receive
+            //
+            bool recvSet = false;
+            bool sendSet = false;
+            bool errorSet = false;
+            {
+                LOCK(pnode->cs_hSocket);
+                if (pnode->hSocket == INVALID_SOCKET)
+                    continue;
+                recvSet = mapCNodeToPollfd[pnode]->revents & POLLIN;
+                sendSet = mapCNodeToPollfd[pnode]->revents & POLLOUT;
+                errorSet = mapCNodeToPollfd[pnode]->revents & (POLLERR|POLLHUP);
+            }
+
+            if (recvSet || errorSet)
+            {
+                // typical socket buffer is 8K-64K
+                char pchBuf[0x10000];
+                int nBytes = 0;
+                {
+                    LOCK(pnode->cs_hSocket);
+                    if (pnode->hSocket == INVALID_SOCKET)
+                        continue;
+                    nBytes = recv(pnode->hSocket, pchBuf, sizeof(pchBuf), MSG_DONTWAIT);
+                }
+                if (nBytes > 0)
+                {
+                    bool notify = false;
+                    if (!pnode->ReceiveMsgBytes(pchBuf, nBytes, notify))
+                        pnode->CloseSocketDisconnect();
+                    RecordBytesRecv(nBytes);
+                    if (notify) {
+                        size_t nSizeAdded = 0;
+                        auto it(pnode->vRecvMsg.begin());
+                        for (; it != pnode->vRecvMsg.end(); ++it) {
+                            if (!it->complete())
+                                break;
+                            nSizeAdded += it->vRecv.size() + CMessageHeader::HEADER_SIZE;
+                        }
+                        {
+                            LOCK(pnode->cs_vProcessMsg);
+                            pnode->vProcessMsg.splice(pnode->vProcessMsg.end(), pnode->vRecvMsg, pnode->vRecvMsg.begin(), it);
+                            pnode->nProcessQueueSize += nSizeAdded;
+                            pnode->fPauseRecv = pnode->nProcessQueueSize > nReceiveFloodSize;
+                        }
+                        WakeMessageHandler();
+                    }
+                }
+                else if (nBytes == 0)
+                {
+                    // socket closed gracefully
+                    if (!pnode->fDisconnect) {
+                        LogPrint(BCLog::NET, "socket closed\n");
+                    }
+                    pnode->CloseSocketDisconnect();
+                }
+                else if (nBytes < 0)
+                {
+                    // error
+                    int nErr = WSAGetLastError();
+                    if (nErr != WSAEWOULDBLOCK && nErr != WSAEMSGSIZE && nErr != WSAEINTR && nErr != WSAEINPROGRESS)
+                    {
+                        if (!pnode->fDisconnect)
+                            LogPrintf("socket recv error %s\n", NetworkErrorString(nErr));
+                        pnode->CloseSocketDisconnect();
+                    }
+                }
+            }
+
+            //
+            // Send
+            //
+            if (sendSet)
+            {
+                LOCK(pnode->cs_vSend);
+                size_t nBytes = SocketSendData(pnode);
+                if (nBytes) {
+                    RecordBytesSent(nBytes);
+                }
+            }
+        }
+        {
+            LOCK(cs_vNodes);
+            for (CNode* pnode : vNodesCopy)
+                pnode->Release();
+        }
+
+        //
+        // Inactivity checking
+        //
+        InactivityCheck();
+    }
+}
+#endif
 
 void CConnman::WakeMessageHandler()
 {
