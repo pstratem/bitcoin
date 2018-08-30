@@ -31,6 +31,7 @@
 
 #ifndef WIN32
 #include <arpa/inet.h>
+#include <poll.h>
 #endif
 
 
@@ -406,6 +407,20 @@ private:
     std::list<CNode*> vNodesDisconnected;
     mutable CCriticalSection cs_vNodes;
     std::atomic<NodeId> nLastNodeId;
+
+#ifndef WIN32
+    std::vector<struct pollfd> vPollFds;
+    std::map<CNode*, std::size_t> mapCNodeToPollFdOffset;
+    std::map<SOCKET, std::size_t> mapListenSocketToPollFdOffset;
+
+    void RegisterPollFd(CNode *pnode);
+    void UnregisterPollFd(CNode *pnode);
+
+    void RegisterListenSocket(const ListenSocket& hListenSocket);
+    void UnregisterListenSocket(const ListenSocket& hListenSocket);
+
+    void RebuildPollFdMaps();
+#endif
 
     /** Services this instance offers */
     ServiceFlags nLocalServices;

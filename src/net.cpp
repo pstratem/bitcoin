@@ -296,6 +296,46 @@ bool IsReachable(const CNetAddr& addr)
     return IsReachable(net);
 }
 
+#ifndef WIN32
+void CConnman::RegisterPollFd(CNode *pnode) {
+    struct pollfd _pollfd;
+    memset(&_pollfd, 0, sizeof(struct pollfd));
+    _pollfd.fd = pnode->hSocket;
+    vPollFds.push_back(_pollfd);
+    mapCNodeToPollFdOffset[pnode] = vPollFds.size() - 1;
+}
+
+void CConnman::RebuildPollFdMaps() {
+    vPollFds.clear();
+    mapCNodeToPollFdOffset.clear();
+
+    {
+        LOCK(cs_vNodes);
+        for (CNode* pnode : vNodes)
+            RegisterPollFd(pnode);
+    }
+
+    for (const ListenSocket& hListenSocket : vhListenSocket) {
+        RegisterListenSocket(hListenSocket);
+    }
+}
+
+void CConnman::UnregisterPollFd(CNode *pnode) {
+    RebuildPollFdMaps();
+}
+
+void CConnman::RegisterListenSocket(const ListenSocket& hListenSocket) {
+    struct pollfd _pollfd;
+    memset(&_pollfd, 0, sizeof(struct pollfd));
+    _pollfd.fd = hListenSocket.socket;
+    vPollFds.push_back(_pollfd);
+    mapListenSocketToPollFdOffset[hListenSocket.socket] = vPollFds.size() - 1;
+}
+
+void CConnman::UnregisterListenSocket(const ListenSocket& hListenSocket) {
+    RebuildPollFdMaps();
+}
+#endif
 
 CNode* CConnman::FindNode(const CNetAddr& ip)
 {
@@ -1150,6 +1190,9 @@ void CConnman::AcceptConnection(const ListenSocket& hListenSocket) {
     {
         LOCK(cs_vNodes);
         vNodes.push_back(pnode);
+#ifndef wIN32
+        RegisterPollFd(pnode);
+#endif
     }
 }
 
@@ -2021,6 +2064,9 @@ void CConnman::OpenNetworkConnection(const CAddress& addrConnect, bool fCountFai
     {
         LOCK(cs_vNodes);
         vNodes.push_back(pnode);
+#ifndef wIN32
+        RegisterPollFd(pnode);
+#endif
     }
 }
 
@@ -2139,6 +2185,7 @@ bool CConnman::BindListenPort(const CService &addrBind, std::string& strError, b
         return false;
     }
 
+    RegisterListenSocket(hListenSocket);
     vhListenSocket.push_back(ListenSocket(hListenSocket, fWhitelisted));
 
     if (addrBind.IsRoutable() && fDiscover && !fWhitelisted)
@@ -2470,6 +2517,9 @@ void CConnman::DeleteNode(CNode* pnode)
     if(fUpdateConnectionTime) {
         addrman.Connected(pnode->addr);
     }
+#ifndef WIN32
+    UnregisterPollFd(pnode);
+#endif
     delete pnode;
 }
 
