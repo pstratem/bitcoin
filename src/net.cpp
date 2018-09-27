@@ -63,6 +63,10 @@
 #endif
 #endif
 
+#ifndef WIN32
+#define USE_POLL
+#endif
+
 /** Used to pass flags to the Bind() function */
 enum BindFlags {
     BF_NONE         = 0,
@@ -1310,6 +1314,56 @@ bool CConnman::GenerateSelectSet(std::set<SOCKET> &recv_set, std::set<SOCKET> &s
     return !recv_set.empty() || !send_set.empty() || !error_set.empty();
 }
 
+#ifdef USE_POLL
+void CConnman::SocketEvents(std::set<SOCKET> &recv_set, std::set<SOCKET> &send_set, std::set<SOCKET> &error_set)
+{
+    std::set<SOCKET> recv_select_set, send_select_set, error_select_set;
+    if (!GenerateSelectSet(recv_select_set, send_select_set, error_select_set)) {
+        interruptNet.sleep_for(std::chrono::milliseconds(SELECT_TIMEOUT_MILLISECONDS));
+        return;
+    }
+
+    std::vector<struct pollfd> pollfds;
+    pollfds.reserve(recv_select_set.size() + send_select_set.size() + error_select_set.size());
+
+    for (SOCKET hSocket : recv_select_set) {
+        struct pollfd pollfd = {};
+        pollfd.fd = hSocket;
+        pollfd.events = POLLIN;
+        pollfds.push_back(pollfd);
+    }
+
+    for (SOCKET hSocket : send_select_set) {
+        struct pollfd pollfd = {};
+        pollfd.fd = hSocket;
+        pollfd.events = POLLOUT;
+        pollfds.push_back(pollfd);
+    }
+
+    for (SOCKET hSocket : error_select_set) {
+        struct pollfd pollfd = {};
+        pollfd.fd = hSocket;
+        // These flags are ignored, but we set them clarity
+        pollfd.events = POLLERR|POLLHUP; 
+        pollfds.push_back(pollfd);
+    }
+
+    if(poll(pollfds.data(), pollfds.size(), 50) < 0)
+        LogPrint(BCLog::NET, "poll failure %d %s\n", errno, strerror(errno));
+
+    if (interruptNet)
+        return;
+
+    for (struct pollfd pollfd : pollfds) {
+        if (pollfd.revents & POLLIN)
+            recv_set.insert(pollfd.fd);
+        if (pollfd.revents & POLLOUT)
+            send_set.insert(pollfd.fd);
+        if (pollfd.revents & (POLLERR|POLLHUP))
+            error_set.insert(pollfd.fd);
+    }
+}
+#else
 void CConnman::SocketEvents(std::set<SOCKET> &recv_set, std::set<SOCKET> &send_set, std::set<SOCKET> &error_set)
 {
     std::set<SOCKET> recv_select_set, send_select_set, error_select_set;
@@ -1377,6 +1431,7 @@ void CConnman::SocketEvents(std::set<SOCKET> &recv_set, std::set<SOCKET> &send_s
         if(FD_ISSET(hSocket, &fdsetError))
             error_set.insert(hSocket);
 }
+#endif
 
 void CConnman::SocketHandler()
 {
