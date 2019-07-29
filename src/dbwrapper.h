@@ -237,6 +237,7 @@ public:
 
         std::string strValue;
         leveldb::Status status = pdb->Get(readoptions, slKey, &strValue);
+        LogPrint(BCLog::LEVELDBV, "LevelDB Read Get %lld\n", GetTimeMicros());
         if (!status.ok()) {
             if (status.IsNotFound())
                 return false;
@@ -271,6 +272,7 @@ public:
 
         std::string strValue;
         leveldb::Status status = pdb->Get(readoptions, slKey, &strValue);
+        LogPrint(BCLog::LEVELDBV, "LevelDB Exists Get %lld\n", GetTimeMicros());
         if (!status.ok()) {
             if (status.IsNotFound())
                 return false;
@@ -328,6 +330,7 @@ public:
         uint64_t size = 0;
         leveldb::Range range(slKey1, slKey2);
         pdb->GetApproximateSizes(&range, 1, &size);
+        LogPrint(BCLog::LEVELDBV, "LevelDB GetApproximateSizes %lld\n", GetTimeMicros());
         return size;
     }
 
@@ -345,6 +348,7 @@ public:
         leveldb::Slice slKey1(ssKey1.data(), ssKey1.size());
         leveldb::Slice slKey2(ssKey2.data(), ssKey2.size());
         pdb->CompactRange(&slKey1, &slKey2);
+        LogPrint(BCLog::LEVELDBV, "LevelDB CompactRange %lld\n", GetTimeMicros());
     }
 
 };

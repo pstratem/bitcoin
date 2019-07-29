@@ -188,6 +188,7 @@ bool CDBWrapper::WriteBatch(CDBBatch& batch, bool fSync)
         mem_before = DynamicMemoryUsage() / 1024.0 / 1024;
     }
     leveldb::Status status = pdb->Write(fSync ? syncoptions : writeoptions, &batch.batch);
+    LogPrint(BCLog::LEVELDBV, "LevelDB Write %lld\n", GetTimeMicros());
     dbwrapper_private::HandleError(status);
     if (log_memory) {
         double mem_after = DynamicMemoryUsage() / 1024.0 / 1024;
