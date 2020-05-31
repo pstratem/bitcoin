@@ -23,6 +23,7 @@ static constexpr int GCS_SER_VERSION = 0;
 static const std::map<BlockFilterType, std::string> g_filter_types = {
     {BlockFilterType::BASIC, "basic"},
     {BlockFilterType::FIXED, "fixed"},
+    {BlockFilterType::FIXED_LOWFP, "fixed_lowfp"},
 };
 
 // Map a value x that is uniformly distributed in the range [0, 2^64) to a
@@ -295,18 +296,29 @@ BlockFilter::BlockFilter(BlockFilterType filter_type, const CBlock& block, const
 
 bool BlockFilter::BuildParams(GCSFilter::Params& params) const
 {
-    switch (m_filter_type) {
+    return BuildParams(m_filter_type, m_block_hash, params);
+}
+
+bool BlockFilter::BuildParams(BlockFilterType filter_type, uint256 block_hash, GCSFilter::Params& params)
+{
+    switch (filter_type) {
     case BlockFilterType::BASIC:
-        params.m_siphash_k0 = m_block_hash.GetUint64(0);
-        params.m_siphash_k1 = m_block_hash.GetUint64(1);
+        params.m_siphash_k0 = block_hash.GetUint64(0);
+        params.m_siphash_k1 = block_hash.GetUint64(1);
         params.m_P = BASIC_FILTER_P;
         params.m_M = BASIC_FILTER_M;
         return true;
     case BlockFilterType::FIXED:
         params.m_siphash_k0 = 0;
         params.m_siphash_k1 = 1;
-        params.m_P = BASIC_FILTER_P;
-        params.m_M = BASIC_FILTER_M;
+        params.m_P = FIXED_FILTER_P;
+        params.m_M = FIXED_FILTER_M;
+        return true;
+    case BlockFilterType::FIXED_LOWFP:
+        params.m_siphash_k0 = 0;
+        params.m_siphash_k1 = 1;
+        params.m_P = FIXED_LOWFP_FILTER_P;
+        params.m_M = FIXED_LOWFP_FILTER_M;
         return true;
     case BlockFilterType::INVALID:
         return false;

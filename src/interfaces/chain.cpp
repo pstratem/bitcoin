@@ -187,9 +187,16 @@ public:
         }
         return nullopt;
     }
+    GCSFilter::HashSet buildHashSet(const GCSFilter::ElementSet element_set)
+    {
+        GCSFilter::Params params;
+        if (!BlockFilter::BuildParams(BlockFilterType::FIXED, uint256(), params))
+            throw std::runtime_error("it's broken");
+        return GCSFilter::BuildHashedSet(element_set, params);
+    }
     Optional<bool> filterMatchesAny(const uint256& hash, const GCSFilter::HashSet& hash_set) override
     {
-        const BlockFilterIndex* block_filter_index = GetBlockFilterIndex(BlockFilterType::FIXED);
+        const BlockFilterIndex* block_filter_index = GetBlockFilterIndex(BlockFilterType::FIXED_LOWFP);
         if (!block_filter_index) return {};
         BlockFilter filter;
         const CBlockIndex* index;

@@ -128,6 +128,8 @@ public:
     //! information.
     virtual bool findFirstBlockWithTimeAndHeight(int64_t min_time, int min_height, const FoundBlock& block={}) = 0;
 
+    virtual GCSFilter::HashSet buildHashSet(const GCSFilter::ElementSet element_set) = 0;
+
     //! Returns whether any of the elements match the block via a BIP 157 block filter or nothing if the block filter
     //! for this block could be found.
     virtual Optional<bool> filterMatchesAny(const uint256& hash, const GCSFilter::HashSet& hash_set) = 0;

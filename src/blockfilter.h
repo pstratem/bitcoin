@@ -89,10 +89,17 @@ public:
 constexpr uint8_t BASIC_FILTER_P = 19;
 constexpr uint32_t BASIC_FILTER_M = 784931;
 
+constexpr uint8_t FIXED_FILTER_P = 19;
+constexpr uint32_t FIXED_FILTER_M = 784931;
+
+constexpr uint8_t FIXED_LOWFP_FILTER_P = 30;
+constexpr uint32_t FIXED_LOWFP_FILTER_M = 1607538613;
+
 enum class BlockFilterType : uint8_t
 {
     BASIC = 0,
     FIXED = 1,
+    FIXED_LOWFP = 2,
     INVALID = 255,
 };
 
@@ -119,9 +126,11 @@ private:
     uint256 m_block_hash;
     GCSFilter m_filter;
 
-    bool BuildParams(GCSFilter::Params& params) const;
+
 
 public:
+    static bool BuildParams(BlockFilterType filter_type, uint256 block_hash, GCSFilter::Params& params);
+    bool BuildParams(GCSFilter::Params& params) const;
 
     BlockFilter() = default;
 
