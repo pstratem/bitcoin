@@ -22,6 +22,7 @@ static constexpr int GCS_SER_VERSION = 0;
 
 static const std::map<BlockFilterType, std::string> g_filter_types = {
     {BlockFilterType::BASIC, "basic"},
+    {BlockFilterType::FIXED, "fixed"},
 };
 
 // Map a value x that is uniformly distributed in the range [0, 2^64) to a
@@ -276,6 +277,12 @@ bool BlockFilter::BuildParams(GCSFilter::Params& params) const
     case BlockFilterType::BASIC:
         params.m_siphash_k0 = m_block_hash.GetUint64(0);
         params.m_siphash_k1 = m_block_hash.GetUint64(1);
+        params.m_P = BASIC_FILTER_P;
+        params.m_M = BASIC_FILTER_M;
+        return true;
+    case BlockFilterType::FIXED:
+        params.m_siphash_k0 = 0;
+        params.m_siphash_k1 = 1;
         params.m_P = BASIC_FILTER_P;
         params.m_M = BASIC_FILTER_M;
         return true;
