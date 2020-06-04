@@ -26,6 +26,7 @@ class GCSFilter
 public:
     typedef std::vector<unsigned char> Element;
     typedef std::unordered_set<Element, ByteVectorHash> ElementSet;
+    typedef std::set<uint64_t> HashSet;
 
     struct Params
     {
@@ -48,7 +49,7 @@ private:
     /** Hash a data element to an integer in the range [0, N * M). */
     uint64_t HashToRange(const Element& element) const;
 
-    std::vector<uint64_t> BuildHashedSet(const ElementSet& elements) const;
+    std::vector<uint64_t> BuildRangedHashedSet(const ElementSet& elements) const;
 
     /** Helper method used to implement Match and MatchAny */
     bool MatchInternal(const uint64_t* sorted_element_hashes, size_t size) const;
@@ -80,6 +81,9 @@ public:
      * efficient that checking Match on multiple elements separately.
      */
     bool MatchAny(const ElementSet& elements) const;
+    bool MatchAny(const HashSet& elements) const;
+
+    static HashSet BuildHashedSet(const ElementSet& elements, const Params& params);
 };
 
 constexpr uint8_t BASIC_FILTER_P = 19;

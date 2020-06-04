@@ -56,15 +56,19 @@ static uint64_t MapIntoRange(uint64_t x, uint64_t n)
 #endif
 }
 
-uint64_t GCSFilter::HashToRange(const Element& element) const
+uint64_t Hash(const GCSFilter::Element& element, GCSFilter::Params params)
 {
-    uint64_t hash = CSipHasher(m_params.m_siphash_k0, m_params.m_siphash_k1)
+    return CSipHasher(params.m_siphash_k0, params.m_siphash_k1)
         .Write(element.data(), element.size())
         .Finalize();
-    return MapIntoRange(hash, m_F);
 }
 
-std::vector<uint64_t> GCSFilter::BuildHashedSet(const ElementSet& elements) const
+uint64_t GCSFilter::HashToRange(const Element& element) const
+{
+    return MapIntoRange(Hash(element, m_params), m_F);
+}
+
+std::vector<uint64_t> GCSFilter::BuildRangedHashedSet(const ElementSet& elements) const
 {
     std::vector<uint64_t> hashed_elements;
     hashed_elements.reserve(elements.size());
@@ -123,7 +127,7 @@ GCSFilter::GCSFilter(const Params& params, const ElementSet& elements)
     BitStreamWriter<CVectorWriter> bitwriter(stream);
 
     uint64_t last_value = 0;
-    for (uint64_t value : BuildHashedSet(elements)) {
+    for (uint64_t value : BuildRangedHashedSet(elements)) {
         uint64_t delta = value - last_value;
         GolombRiceEncode(bitwriter, m_params.m_P, delta);
         last_value = value;
@@ -172,8 +176,26 @@ bool GCSFilter::Match(const Element& element) const
 
 bool GCSFilter::MatchAny(const ElementSet& elements) const
 {
-    const std::vector<uint64_t> queries = BuildHashedSet(elements);
+    const std::vector<uint64_t> queries = BuildRangedHashedSet(elements);
     return MatchInternal(queries.data(), queries.size());
+}
+
+bool GCSFilter::MatchAny(const HashSet& elements) const
+{
+    std::vector<uint64_t> queries;
+    for (const uint64_t& element : elements) {
+        queries.push_back(MapIntoRange(element, m_F));
+    }
+    return MatchInternal(queries.data(), queries.size());
+}
+
+GCSFilter::HashSet GCSFilter::BuildHashedSet(const ElementSet& elements, const Params& params)
+{
+    std::set<uint64_t> hashed_elements;
+    for (const Element& element : elements) {
+        hashed_elements.emplace(Hash(element, params));
+    }
+    return hashed_elements;
 }
 
 const std::string& BlockFilterTypeName(BlockFilterType filter_type)
