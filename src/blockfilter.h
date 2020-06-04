@@ -146,23 +146,33 @@ public:
     void Serialize(Stream& s) const {
         s << static_cast<uint8_t>(m_filter_type)
           << m_block_hash
-          << m_filter.GetEncoded();
+          << m_filter.GetEncoded()
+          << m_filter.GetParams().m_siphash_k0
+          << m_filter.GetParams().m_siphash_k1;
     }
 
     template <typename Stream>
     void Unserialize(Stream& s) {
         std::vector<unsigned char> encoded_filter;
         uint8_t filter_type;
+        uint64_t siphash_k0, siphash_k1;
 
         s >> filter_type
           >> m_block_hash
-          >> encoded_filter;
+          >> encoded_filter
+          >> siphash_k0
+          >> siphash_k1;
 
         m_filter_type = static_cast<BlockFilterType>(filter_type);
 
         GCSFilter::Params params;
+        params.m_siphash_k0 = siphash_k0;
+        params.m_siphash_k1 = siphash_k1;
         if (!BuildParams(params)) {
             throw std::ios_base::failure("unknown filter_type");
+        }
+        if(params.m_siphash_k0 != siphash_k0 || params.m_siphash_k1 != siphash_k1) {
+            throw std::ios_base::failure("corrupt siphash parameters");
         }
         m_filter = GCSFilter(params, std::move(encoded_filter));
     }
