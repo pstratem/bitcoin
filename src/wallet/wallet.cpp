@@ -1727,9 +1727,9 @@ CWallet::ScanResult CWallet::ScanForWalletTransactions(const uint256& start_bloc
         bool next_block;
         uint256 next_block_hash;
         bool reorg = false;
-        if (chain().findBlock(block_hash, FoundBlock().data(block)) && !block.IsNull()) {
+        next_block = chain().findNextBlock(block_hash, block_height, FoundBlock().hash(next_block_hash), &reorg);
+        {
             LOCK(cs_wallet);
-            next_block = chain().findNextBlock(block_hash, block_height, FoundBlock().hash(next_block_hash), &reorg);
             if (reorg) {
                 // Abort scan if current block is no longer active, to prevent
                 // marking transactions as coming from the wrong block.
@@ -1743,19 +1743,20 @@ CWallet::ScanResult CWallet::ScanForWalletTransactions(const uint256& start_bloc
             Optional<bool> filter_matches = chain().filterMatchesAny(block_hash, GetScriptPubKeyHashSet());
             if (filter_matches.value_or(true)) {
                 WalletLogPrintf("block_height %d\n", block_height);
-                for (size_t posInBlock = 0; posInBlock < block.vtx.size(); ++posInBlock) {
-                    CWalletTx::Confirmation confirm(CWalletTx::Status::CONFIRMED, block_height, block_hash, posInBlock);
-                    SyncTransaction(block.vtx[posInBlock], confirm, fUpdate);
+                if (chain().findBlock(block_hash, FoundBlock().data(block)) && !block.IsNull()) {
+                    for (size_t posInBlock = 0; posInBlock < block.vtx.size(); ++posInBlock) {
+                        CWalletTx::Confirmation confirm(CWalletTx::Status::CONFIRMED, block_height, block_hash, posInBlock);
+                        SyncTransaction(block.vtx[posInBlock], confirm, fUpdate);
+                    }
+                } else {
+                    // could not scan block, keep scanning but record this block as the most recent failure
+                    result.last_failed_block = block_hash;
+                    result.status = ScanResult::FAILURE;
                 }
             }
             // scan succeeded, record block as most recent successfully scanned
             result.last_scanned_block = block_hash;
             result.last_scanned_height = block_height;
-        } else {
-            // could not scan block, keep scanning but record this block as the most recent failure
-            result.last_failed_block = block_hash;
-            result.status = ScanResult::FAILURE;
-            next_block = chain().findNextBlock(block_hash, block_height, FoundBlock().hash(next_block_hash), &reorg);
         }
         if (max_height && block_height >= *max_height) {
             break;
