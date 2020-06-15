@@ -28,6 +28,7 @@
 constexpr char DB_BLOCK_HASH = 's';
 constexpr char DB_BLOCK_HEIGHT = 't';
 constexpr char DB_FILTER_POS = 'P';
+constexpr char DB_FILTER_KEYS = 'K';
 
 constexpr unsigned int MAX_FLTR_FILE_SIZE = 0x1000000; // 16 MiB
 /** The pre-allocation chunk size for fltr?????.dat files */
@@ -122,6 +123,16 @@ bool BlockFilterIndex::Init()
         // If the DB_FILTER_POS is not set, then initialize to the first location.
         m_next_filter_pos.nFile = 0;
         m_next_filter_pos.nPos = 0;
+    }
+    if (!m_db->Read(DB_FILTER_KEYS, m_filter_keys)) {
+        if (m_db->Exists(DB_FILTER_KEYS)) {
+            return error("Filter keys corrupted");
+        }
+
+        m_filter_keys = std::make_pair(GetRand(std::numeric_limits<uint64_t>::max()), GetRand(std::numeric_limits<uint64_t>::max()));
+        if(!m_db->Write(DB_FILTER_KEYS, m_filter_keys)) {
+            return error("Filter keys could not be written");
+        }
     }
     return BaseIndex::Init();
 }

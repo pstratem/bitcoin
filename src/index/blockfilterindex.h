@@ -29,6 +29,7 @@ class BlockFilterIndex final : public BaseIndex
 {
 private:
     BlockFilterType m_filter_type;
+    std::pair<uint64_t, uint64_t> m_filter_keys;
     std::string m_name;
     std::unique_ptr<BaseIndex::DB> m_db;
 
