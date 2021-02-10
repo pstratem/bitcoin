@@ -16,6 +16,7 @@
 #include <consensus/validation.h>
 #include <cuckoocache.h>
 #include <flatfile.h>
+#include <fs.h>
 #include <hash.h>
 #include <index/txindex.h>
 #include <logging.h>
@@ -1294,8 +1295,12 @@ void CChainState::InitCoinsCache(size_t cache_size_bytes)
 // `const` so that `CValidationInterface` clients (which are given a `const CChainState*`)
 // can call it.
 //
+// The file .ibd_complete is used to latch the datadir to IBD false across restarts
+//
 bool CChainState::IsInitialBlockDownload() const
 {
+    FILE *f;
+    static fs::path latch_filename = fsbridge::AbsPathJoin(GetDataDir(), ".ibd_complete");
     // Optimization: pre-test latch before taking the lock.
     if (m_cached_finished_ibd.load(std::memory_order_relaxed))
         return false;
@@ -1303,6 +1308,12 @@ bool CChainState::IsInitialBlockDownload() const
     LOCK(cs_main);
     if (m_cached_finished_ibd.load(std::memory_order_relaxed))
         return false;
+    if ((f = fsbridge::fopen(latch_filename, "rb"))) {
+        fclose(f);
+        LogPrintf("Leaving InitialBlockDownload (latching to false)\n");
+        m_cached_finished_ibd.store(true, std::memory_order_relaxed);
+        return false;
+    }
     if (fImporting || fReindex)
         return true;
     if (m_chain.Tip() == nullptr)
@@ -1312,6 +1323,9 @@ bool CChainState::IsInitialBlockDownload() const
     if (m_chain.Tip()->GetBlockTime() < (GetTime() - nMaxTipAge))
         return true;
     LogPrintf("Leaving InitialBlockDownload (latching to false)\n");
+    f = fsbridge::fopen(latch_filename, "wb");
+    if (!f) LogPrintf("Failed to write %s \n", latch_filename.c_str());
+    else fclose(f);
     m_cached_finished_ibd.store(true, std::memory_order_relaxed);
     return false;
 }
