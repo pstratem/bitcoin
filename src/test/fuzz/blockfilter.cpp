@@ -34,7 +34,6 @@ FUZZ_TARGET(blockfilter)
         (void)gcs_filter.GetN();
         (void)gcs_filter.GetParams();
         (void)gcs_filter.GetEncoded();
-        (void)gcs_filter.Match(ConsumeRandomLengthByteVector(fuzzed_data_provider));
         GCSFilter::ElementSet element_set;
         LIMITED_WHILE(fuzzed_data_provider.ConsumeBool(), 30000)
         {

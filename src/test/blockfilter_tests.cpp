@@ -31,8 +31,6 @@ BOOST_AUTO_TEST_CASE(gcsfilter_test)
 
     GCSFilter filter({0, 0, 10, 1 << 10}, included_elements);
     for (const auto& element : included_elements) {
-        BOOST_CHECK(filter.Match(element));
-
         auto insertion = excluded_elements.insert(element);
         BOOST_CHECK(filter.MatchAny(excluded_elements));
         excluded_elements.erase(insertion.first);
@@ -98,14 +96,6 @@ BOOST_AUTO_TEST_CASE(blockfilter_basic_test)
     block_undo.vtxundo.back().vprevout.emplace_back(CTxOut(700, excluded_scripts[3]), 100000, false);
 
     BlockFilter block_filter(BlockFilterType::BASIC, block, block_undo);
-    const GCSFilter& filter = block_filter.GetFilter();
-
-    for (const CScript& script : included_scripts) {
-        BOOST_CHECK(filter.Match(GCSFilter::Element(script.begin(), script.end())));
-    }
-    for (const CScript& script : excluded_scripts) {
-        BOOST_CHECK(!filter.Match(GCSFilter::Element(script.begin(), script.end())));
-    }
 
     // Test serialization/unserialization.
     BlockFilter block_filter2;

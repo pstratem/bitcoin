@@ -24,25 +24,6 @@ static const std::map<BlockFilterType, std::string> g_filter_types = {
     {BlockFilterType::BASIC, "basic"},
 };
 
-uint64_t GCSFilter::HashToRange(const Element& element) const
-{
-    uint64_t hash = CSipHasher(m_params.m_siphash_k0, m_params.m_siphash_k1)
-        .Write(element.data(), element.size())
-        .Finalize();
-    return FastRange64(hash, m_F);
-}
-
-std::vector<uint64_t> GCSFilter::BuildHashedSet(const ElementSet& elements) const
-{
-    std::vector<uint64_t> hashed_elements;
-    hashed_elements.reserve(elements.size());
-    for (const Element& element : elements) {
-        hashed_elements.push_back(HashToRange(element));
-    }
-    std::sort(hashed_elements.begin(), hashed_elements.end());
-    return hashed_elements;
-}
-
 GCSFilter::GCSFilter(const Params& params)
     : m_params(params), m_N(0), m_F(0), m_encoded{0}
 {}
@@ -92,8 +73,10 @@ GCSFilter::GCSFilter(const Params& params, const ElementSet& elements)
 
     BitStreamWriter<CVectorWriter> bitwriter(stream);
 
+    HashedElementSet hashed_elements(m_params, elements);
+
     uint64_t last_value = 0;
-    for (uint64_t value : BuildHashedSet(elements)) {
+    for (uint64_t value : hashed_elements.GetSortedRangedSet(m_F)) {
         uint64_t delta = value - last_value;
         GolombRiceEncode(bitwriter, m_params.m_P, delta);
         last_value = value;
@@ -134,15 +117,9 @@ bool GCSFilter::MatchInternal(const uint64_t* element_hashes, size_t size) const
     return false;
 }
 
-bool GCSFilter::Match(const Element& element) const
-{
-    uint64_t query = HashToRange(element);
-    return MatchInternal(&query, 1);
-}
-
 bool GCSFilter::MatchAny(const ElementSet& elements) const
 {
-    const std::vector<uint64_t> queries = BuildHashedSet(elements);
+    const std::vector<uint64_t> queries = HashedElementSet(m_params, elements).GetSortedRangedSet(m_F);
     return MatchInternal(queries.data(), queries.size());
 }
 

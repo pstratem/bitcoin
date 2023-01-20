@@ -17,6 +17,7 @@
 #include <uint256.h>
 #include <undo.h>
 #include <util/bytevectorhash.h>
+#include <util/fastrange.h>
 
 /**
  * This implements a Golomb-coded set as defined in BIP 158. It is a
@@ -40,16 +41,37 @@ public:
         {}
     };
 
+    class HashedElementSet
+    {
+    private:
+        std::set<uint64_t> m_hashed_elements;
+        Params m_params;
+    public:
+        HashedElementSet(Params params, ElementSet elements)
+            : m_params(params) {
+            for (const Element& element : elements) {
+                uint64_t hash = CSipHasher(m_params.m_siphash_k0, m_params.m_siphash_k1)
+                    .Write(element.data(), element.size())
+                    .Finalize();
+                m_hashed_elements.insert(hash);
+            }
+        }
+
+        std::vector<uint64_t> GetSortedRangedSet(const uint64_t F) const {
+            std::vector<uint64_t> sorted_ranged_set;
+            sorted_ranged_set.reserve(m_hashed_elements.size());
+            for (auto hashed_element : m_hashed_elements) {
+                sorted_ranged_set.push_back(FastRange64(hashed_element, F));
+            }
+            return sorted_ranged_set;
+        }
+    };
+
 private:
     Params m_params;
     uint32_t m_N;  //!< Number of elements in the filter
     uint64_t m_F;  //!< Range of element hashes, F = N * M
     std::vector<unsigned char> m_encoded;
-
-    /** Hash a data element to an integer in the range [0, N * M). */
-    uint64_t HashToRange(const Element& element) const;
-
-    std::vector<uint64_t> BuildHashedSet(const ElementSet& elements) const;
 
     /** Helper method used to implement Match and MatchAny */
     bool MatchInternal(const uint64_t* sorted_element_hashes, size_t size) const;
@@ -68,12 +90,6 @@ public:
     uint32_t GetN() const { return m_N; }
     const Params& GetParams() const LIFETIMEBOUND { return m_params; }
     const std::vector<unsigned char>& GetEncoded() const LIFETIMEBOUND { return m_encoded; }
-
-    /**
-     * Checks if the element may be in the set. False positives are possible
-     * with probability 1/M.
-     */
-    bool Match(const Element& element) const;
 
     /**
      * Checks if any of the given elements may be in the set. False positives
