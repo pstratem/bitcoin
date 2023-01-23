@@ -50,11 +50,15 @@ public:
         HashedElementSet(Params params, ElementSet elements)
             : m_params(params) {
             for (const Element& element : elements) {
-                uint64_t hash = CSipHasher(m_params.m_siphash_k0, m_params.m_siphash_k1)
-                    .Write(element.data(), element.size())
-                    .Finalize();
-                m_hashed_elements.insert(hash);
+                HashedInsert(element);
             }
+        }
+
+        void HashedInsert(const Element& element) {
+            uint64_t hash = CSipHasher(m_params.m_siphash_k0, m_params.m_siphash_k1)
+                .Write(element.data(), element.size())
+                .Finalize();
+            m_hashed_elements.insert(hash);
         }
 
         std::vector<uint64_t> GetSortedRangedSet(const uint64_t F) const {
@@ -91,12 +95,15 @@ public:
     const Params& GetParams() const LIFETIMEBOUND { return m_params; }
     const std::vector<unsigned char>& GetEncoded() const LIFETIMEBOUND { return m_encoded; }
 
+    HashedElementSet buildHashedElementSet(ElementSet elements) const { return HashedElementSet(m_params, elements); }
+
     /**
      * Checks if any of the given elements may be in the set. False positives
      * are possible with probability 1/M per element checked. This is more
      * efficient that checking Match on multiple elements separately.
      */
     bool MatchAny(const ElementSet& elements) const;
+    bool MatchAny(const HashedElementSet& hashed_elements) const;
 };
 
 constexpr uint8_t BASIC_FILTER_P = 19;

@@ -271,6 +271,14 @@ public:
         // fast rescanning via block filters is only supported by descriptor wallets right now
         assert(!m_wallet.IsLegacy());
 
+        // initalize GCSFilter::HashedElementSet with correct parameters
+        if (m_wallet.chain().hasWalletFilterIndex()) {
+            std::optional<GCSFilter::Params> wallet_filter_params = m_wallet.chain().walletFilterParams();
+            if (wallet_filter_params.has_value()) {
+                m_hashed_elements = std::make_unique<GCSFilter::HashedElementSet>(wallet_filter_params.value(), GCSFilter::ElementSet());
+            }
+        }
+
         // create initial filter with scripts from all ScriptPubKeyMans
         for (auto spkm : m_wallet.GetAllScriptPubKeyMans()) {
             auto desc_spkm{dynamic_cast<DescriptorScriptPubKeyMan*>(spkm)};
@@ -299,7 +307,11 @@ public:
 
     std::optional<bool> MatchesBlock(const uint256& block_hash) const
     {
-        return m_wallet.chain().blockFilterMatchesAny(BlockFilterType::BASIC, block_hash, m_filter_set);
+        if (m_wallet.chain().hasWalletFilterIndex()) {
+            return m_wallet.chain().walletFilterMatchesAny(*m_hashed_elements, block_hash);
+        } else {
+            return m_wallet.chain().blockFilterMatchesAny(BlockFilterType::BASIC, block_hash, m_filter_set);
+        }
     }
 
 private:
@@ -312,11 +324,16 @@ private:
       */
     std::map<uint256, int32_t> m_last_range_ends;
     GCSFilter::ElementSet m_filter_set;
+    std::unique_ptr<GCSFilter::HashedElementSet> m_hashed_elements;
 
     void AddScriptPubKeys(const DescriptorScriptPubKeyMan* desc_spkm, int32_t last_range_end = 0)
     {
         for (const auto& script_pub_key : desc_spkm->GetScriptPubKeys(last_range_end)) {
-            m_filter_set.emplace(script_pub_key.begin(), script_pub_key.end());
+            if (m_wallet.chain().hasWalletFilterIndex()) {
+                m_hashed_elements->HashedInsert(GCSFilter::Element(script_pub_key.begin(), script_pub_key.end()));
+            } else {
+                m_filter_set.emplace(script_pub_key.begin(), script_pub_key.end());
+            }
         }
     }
 };

@@ -151,6 +151,16 @@ public:
     //! or std::nullopt if the block filter for this block couldn't be found.
     virtual std::optional<bool> blockFilterMatchesAny(BlockFilterType filter_type, const uint256& block_hash, const GCSFilter::ElementSet& filter_set) = 0;
 
+    //! Returns whether a block filter index is available.
+    virtual bool hasWalletFilterIndex() = 0;
+
+    //! Returns the gcsfilter parameters used by the wallet filter
+    virtual std::optional<GCSFilter::Params> walletFilterParams() = 0;
+
+    //! Returns whether any of the elements match the block via a BIP 157 block filter
+    //! or std::nullopt if the block filter for this block couldn't be found.
+    virtual std::optional<bool> walletFilterMatchesAny(const GCSFilter::HashedElementSet& hashed_elements, const uint256& block_hash) = 0;
+
     //! Return whether node has the block and optionally return block metadata
     //! or contents.
     virtual bool findBlock(const uint256& hash, const FoundBlock& block={}) = 0;

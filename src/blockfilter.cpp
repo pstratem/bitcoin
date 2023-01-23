@@ -73,7 +73,7 @@ GCSFilter::GCSFilter(const Params& params, const ElementSet& elements)
 
     BitStreamWriter<CVectorWriter> bitwriter(stream);
 
-    HashedElementSet hashed_elements(m_params, elements);
+    HashedElementSet hashed_elements = buildHashedElementSet(elements);
 
     uint64_t last_value = 0;
     for (uint64_t value : hashed_elements.GetSortedRangedSet(m_F)) {
@@ -119,7 +119,13 @@ bool GCSFilter::MatchInternal(const uint64_t* element_hashes, size_t size) const
 
 bool GCSFilter::MatchAny(const ElementSet& elements) const
 {
-    const std::vector<uint64_t> queries = HashedElementSet(m_params, elements).GetSortedRangedSet(m_F);
+    const std::vector<uint64_t> queries = buildHashedElementSet(elements).GetSortedRangedSet(m_F);
+    return MatchInternal(queries.data(), queries.size());
+}
+
+bool GCSFilter::MatchAny(const HashedElementSet& hashed_elements) const
+{
+    const std::vector<uint64_t> queries = hashed_elements.GetSortedRangedSet(m_F);
     return MatchInternal(queries.data(), queries.size());
 }
 
