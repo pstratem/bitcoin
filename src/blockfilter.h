@@ -44,7 +44,7 @@ public:
     class HashedElementSet
     {
     private:
-        std::set<uint64_t> m_hashed_elements;
+        std::vector<uint64_t> m_hashed_elements;
         Params m_params;
     public:
         HashedElementSet(Params params, ElementSet elements)
@@ -58,11 +58,14 @@ public:
             uint64_t hash = CSipHasher(m_params.m_siphash_k0, m_params.m_siphash_k1)
                 .Write(element.data(), element.size())
                 .Finalize();
-            m_hashed_elements.insert(hash);
+            m_hashed_elements.push_back(hash);
         }
 
-        std::vector<uint64_t> GetSortedRangedSet(const uint64_t F) const {
+        std::vector<uint64_t> GetSortedRangedSet(const uint64_t F) {
             std::vector<uint64_t> sorted_ranged_set;
+
+            std::sort(m_hashed_elements.begin(), m_hashed_elements.end());
+
             sorted_ranged_set.reserve(m_hashed_elements.size());
             for (auto hashed_element : m_hashed_elements) {
                 sorted_ranged_set.push_back(FastRange64(hashed_element, F));
@@ -103,7 +106,7 @@ public:
      * efficient that checking Match on multiple elements separately.
      */
     bool MatchAny(const ElementSet& elements) const;
-    bool MatchAny(const HashedElementSet& hashed_elements) const;
+    bool MatchAny(HashedElementSet& hashed_elements) const;
 };
 
 constexpr uint8_t BASIC_FILTER_P = 19;

@@ -563,7 +563,7 @@ public:
         if (g_wallet_filter_index == nullptr) return std::nullopt;
         return g_wallet_filter_index->getParams();
     }
-    std::optional<bool> walletFilterMatchesAny(const GCSFilter::HashedElementSet& hashed_elements, const uint256& block_hash) override
+    std::optional<bool> walletFilterMatchesAny(GCSFilter::HashedElementSet& hashed_elements, const uint256& block_hash) override
     {
         if (g_wallet_filter_index == nullptr) return std::nullopt;
 

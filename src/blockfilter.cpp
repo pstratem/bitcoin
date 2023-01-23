@@ -123,7 +123,7 @@ bool GCSFilter::MatchAny(const ElementSet& elements) const
     return MatchInternal(queries.data(), queries.size());
 }
 
-bool GCSFilter::MatchAny(const HashedElementSet& hashed_elements) const
+bool GCSFilter::MatchAny(HashedElementSet& hashed_elements) const
 {
     const std::vector<uint64_t> queries = hashed_elements.GetSortedRangedSet(m_F);
     return MatchInternal(queries.data(), queries.size());
