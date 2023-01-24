@@ -81,8 +81,21 @@ static void GCSFilterMatch(benchmark::Bench& bench)
         filter.Match(GCSFilter::Element());
     });
 }
+
+static void GCSFilterMatchAny(benchmark::Bench& bench)
+{
+    auto elements = GenerateGCSTestElements();
+    auto query = GenerateGCSTestElements();
+
+    GCSFilter filter({0, 0, BASIC_FILTER_P, BASIC_FILTER_M}, elements);
+
+    bench.run([&] {
+        filter.MatchAny(query);
+    });
+}
 BENCHMARK(GCSBlockFilterGetHash, benchmark::PriorityLevel::HIGH);
 BENCHMARK(GCSFilterConstruct, benchmark::PriorityLevel::HIGH);
 BENCHMARK(GCSFilterDecode, benchmark::PriorityLevel::HIGH);
 BENCHMARK(GCSFilterDecodeSkipCheck, benchmark::PriorityLevel::HIGH);
 BENCHMARK(GCSFilterMatch, benchmark::PriorityLevel::HIGH);
+BENCHMARK(GCSFilterMatchAny, benchmark::PriorityLevel::HIGH);
