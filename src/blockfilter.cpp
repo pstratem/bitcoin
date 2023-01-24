@@ -112,12 +112,19 @@ bool GCSFilter::MatchInternal(const uint64_t* element_hashes, size_t size) const
 
     BitStreamReader<SpanReader> bitreader{stream};
 
+    std::vector<uint64_t> values;
+    values.reserve(m_N);
+
     uint64_t value = 0;
-    size_t hashes_index = 0;
     for (uint32_t i = 0; i < m_N; ++i) {
         uint64_t delta = GolombRiceDecode(bitreader, m_params.m_P);
         value += delta;
+        values[i] = value;
+    }
 
+    size_t hashes_index = 0;
+    for (uint32_t i = 0; i < m_N; ++i) {
+        uint64_t value = values[i];
         while (true) {
             if (hashes_index == size) {
                 return false;
