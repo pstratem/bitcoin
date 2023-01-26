@@ -49,7 +49,7 @@ public:
         QuerySet(const Params& params) : m_params(params) {};
         QuerySet(const Params& params, const ElementSet& elements);
         void insert(const Element& element, bool sort = true);
-        std::vector<uint64_t> sorted_and_ranged(const uint64_t& F) const;
+        const std::vector<uint64_t>& sorted_elements() const;
     };
 
 private:
