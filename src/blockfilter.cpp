@@ -72,17 +72,6 @@ uint64_t GCSFilter::RangeHashedElement(const uint64_t& hashed_element, const uin
     return FastRange64(hashed_element, F);
 }
 
-std::vector<uint64_t> GCSFilter::BuildHashedSet(const ElementSet& elements) const
-{
-    std::vector<uint64_t> hashed_elements;
-    hashed_elements.reserve(elements.size());
-    for (const Element& element : elements) {
-        uint64_t hashed_element = HashElement(element);
-        hashed_elements.push_back(RangeHashedElement(hashed_element));
-    }
-    std::sort(hashed_elements.begin(), hashed_elements.end());
-    return hashed_elements;
-}
 
 GCSFilter::GCSFilter(const Params& params)
     : m_params(params), m_N(0), m_F(0), m_encoded{0}
@@ -131,10 +120,17 @@ GCSFilter::GCSFilter(const Params& params, const ElementSet& elements)
         return;
     }
 
-    BitStreamWriter<CVectorWriter> bitwriter(stream);
+    std::vector<uint64_t> hashed_elements;
+    hashed_elements.reserve(elements.size());
+    for (const Element& element: elements) {
+        hashed_elements.push_back(RangeHashedElement(HashElement(element)));
+    }
 
+    std::sort(hashed_elements.begin(), hashed_elements.end());
+
+    BitStreamWriter<CVectorWriter> bitwriter(stream);
     uint64_t last_value = 0;
-    for (const uint64_t& value : BuildHashedSet(elements)) {
+    for (const uint64_t& value : hashed_elements) {
         uint64_t delta = value - last_value;
         GolombRiceEncode(bitwriter, m_params.m_P, delta);
         last_value = value;
@@ -183,8 +179,13 @@ bool GCSFilter::Match(const Element& element) const
 
 bool GCSFilter::MatchAny(const ElementSet& elements) const
 {
-    const std::vector<uint64_t> queries = BuildHashedSet(elements);
-    return MatchInternal(queries.data(), queries.size());
+    std::vector<uint64_t> hashed_elements;
+    hashed_elements.reserve(elements.size());
+    for (const Element& element : elements) {
+        hashed_elements.push_back(RangeHashedElement(HashElement(element)));
+    }
+    std::sort(hashed_elements.begin(), hashed_elements.end());
+    return MatchInternal(hashed_elements.data(), hashed_elements.size());
 }
 
 bool GCSFilter::MatchAny(const QuerySet& query_set) const
