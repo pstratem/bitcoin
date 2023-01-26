@@ -568,6 +568,8 @@ private:
     // Fetch the SigningProvider for a given index and optionally include private keys. Called by the above functions.
     std::unique_ptr<FlatSigningProvider> GetSigningProvider(int32_t index, bool include_private = false) const EXCLUSIVE_LOCKS_REQUIRED(cs_desc_man);
 
+    uint256 m_id{0};
+    void CalculateID();
 protected:
   WalletDescriptor m_wallet_descriptor GUARDED_BY(cs_desc_man);
 
@@ -575,7 +577,9 @@ public:
     DescriptorScriptPubKeyMan(WalletStorage& storage, WalletDescriptor& descriptor)
         :   ScriptPubKeyMan(storage),
             m_wallet_descriptor(descriptor)
-        {}
+    {
+        CalculateID();
+    }
     DescriptorScriptPubKeyMan(WalletStorage& storage)
         :   ScriptPubKeyMan(storage)
         {}
