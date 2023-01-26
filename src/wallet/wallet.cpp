@@ -336,6 +336,9 @@ private:
                 m_filter_set.emplace(script_pub_key.begin(), script_pub_key.end());
             }
         }
+        if (m_query_set != nullptr) {
+            m_query_set->sort();
+        }
     }
 };
 } // namespace

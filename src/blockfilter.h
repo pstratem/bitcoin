@@ -48,7 +48,8 @@ public:
         Params m_params;
         QuerySet(const Params& params) : m_params(params) {};
         QuerySet(const Params& params, const ElementSet& elements);
-        void insert(const Element& element, bool sort = true);
+        void insert(const Element& element);
+        void sort();
         const std::vector<uint64_t>& sorted_elements() const;
     };
 

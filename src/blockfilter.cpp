@@ -28,16 +28,19 @@ GCSFilter::QuerySet::QuerySet(const Params& params, const ElementSet& elements)
     : m_params(params)
 {
     for (const Element& element : elements)
-        insert(element, false);
-    std::sort(m_hashed_elements.begin(), m_hashed_elements.end());
+        insert(element);
+    sort();
 }
 
-void GCSFilter::QuerySet::insert(const Element& element, bool sort)
+void GCSFilter::QuerySet::insert(const Element& element)
 {
     uint64_t hashed_element = HashElement(element, m_params.m_siphash_k0, m_params.m_siphash_k1);
     m_hashed_elements.push_back(hashed_element);
-    if (sort)
-        std::sort(m_hashed_elements.begin(), m_hashed_elements.end());
+}
+
+void GCSFilter::QuerySet::sort()
+{
+    std::sort(m_hashed_elements.begin(), m_hashed_elements.end());
 }
 
 const std::vector<uint64_t>& GCSFilter::QuerySet::sorted_elements() const
