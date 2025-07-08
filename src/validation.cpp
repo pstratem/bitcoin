@@ -4057,6 +4057,7 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
 {
     // These are checks that are independent of context.
 
+    assert(!block.fChecked);
     if (block.fChecked)
         return true;
 
