@@ -6,6 +6,12 @@
 #ifndef BITCOIN_PRIMITIVES_BLOCK_H
 #define BITCOIN_PRIMITIVES_BLOCK_H
 
+class CBlockHeader;
+class CBlock;
+class ImmutableBlockHeader;
+class ImmutableBlock;
+
+#include <consensus/merkle.h>
 #include <primitives/transaction.h>
 #include <serialize.h>
 #include <uint256.h>
@@ -33,6 +39,8 @@ public:
     {
         SetNull();
     }
+
+    CBlockHeader(const ImmutableBlockHeader &header);
 
     SERIALIZE_METHODS(CBlockHeader, obj) { READWRITE(obj.nVersion, obj.hashPrevBlock, obj.hashMerkleRoot, obj.nTime, obj.nBits, obj.nNonce); }
 
@@ -64,6 +72,66 @@ public:
     }
 };
 
+class ImmutableBlockHeader
+{
+public:
+    const int32_t nVersion;
+    const uint256 hashPrevBlock;
+    const uint256 hashMerkleRoot;
+    const uint32_t nTime;
+    const uint32_t nBits;
+    const uint32_t nNonce;
+private:
+    mutable std::optional<uint256> hash;
+public:
+    /** Convert a CBlockHeader into a ImmutableBlockHeader. */
+    explicit ImmutableBlockHeader(const CBlockHeader& header);
+
+    uint256 GetHash() const
+    {
+        if (!hash.has_value())
+            hash = CBlockHeader(*this).GetHash();
+        return *hash;
+    }
+
+    NodeSeconds Time() const
+    {
+        return NodeSeconds{std::chrono::seconds{nTime}};
+    }
+
+    int64_t GetBlockTime() const
+    {
+        return (int64_t)nTime;
+    }
+};
+
+class ImmutableBlock : public ImmutableBlockHeader
+{
+public:
+    const std::vector<CTransactionRef> vtx;
+
+    // Memory-only flags for caching expensive checks
+    mutable bool fChecked;                            // CheckBlock()
+    mutable bool m_checked_witness_commitment{false}; // CheckWitnessCommitment()
+    mutable bool m_checked_merkle_root{false};        // CheckMerkleRoot()
+
+    explicit ImmutableBlock(const CBlock& block);
+    explicit ImmutableBlock(CBlock&& block);
+
+    CBlockHeader GetBlockHeader() const
+    {
+        CBlockHeader block;
+        block.nVersion       = nVersion;
+        block.hashPrevBlock  = hashPrevBlock;
+        block.hashMerkleRoot = hashMerkleRoot;
+        block.nTime          = nTime;
+        block.nBits          = nBits;
+        block.nNonce         = nNonce;
+        return block;
+    }
+
+    std::string ToString() const;
+};
 
 class CBlock : public CBlockHeader
 {
@@ -80,6 +148,8 @@ public:
     {
         SetNull();
     }
+
+    CBlock(const ImmutableBlock &block);
 
     CBlock(const CBlockHeader &header)
     {
