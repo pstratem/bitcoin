@@ -4156,7 +4156,7 @@ bool HasValidProofOfWork(const std::vector<CBlockHeader>& headers, const Consens
             [&](const auto& header) { return CheckProofOfWork(header.GetHash(), header.nBits, consensusParams);});
 }
 
-bool IsBlockMutated(const CBlock& block, bool check_witness_root)
+bool IsBlockMutated(const CBlock& block, std::optional<bool> expect_witness_commitment)
 {
     BlockValidationState state;
     if (!CheckMerkleRoot(block, state)) {
@@ -4179,7 +4179,7 @@ bool IsBlockMutated(const CBlock& block, bool check_witness_root)
         // here as it requires at least 224 bits of work.
     }
 
-    if (!CheckWitnessMalleation(block, check_witness_root, state)) {
+    if (expect_witness_commitment.has_value() && !CheckWitnessMalleation(block, expect_witness_commitment.value(), state)) {
         LogDebug(BCLog::VALIDATION, "Block mutated: %s\n", state.ToString());
         return true;
     }
