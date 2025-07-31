@@ -11,6 +11,8 @@
 #include <uint256.h>
 #include <util/time.h>
 
+#include <map>
+
 /** Nodes collect new transactions into a block, hash them into a hash tree,
  * and scan through nonce values to make the block's hash satisfy proof-of-work
  * requirements.  When they solve the proof-of-work, they broadcast the block
@@ -29,6 +31,8 @@ public:
     uint32_t nBits;
     uint32_t nNonce;
 
+    mutable std::map<uint256, std::map<std::vector<void*>, uint64_t> > hash_counter;
+
     CBlockHeader()
     {
         SetNull();
@@ -44,6 +48,8 @@ public:
         nTime = 0;
         nBits = 0;
         nNonce = 0;
+
+        hash_counter.clear();
     }
 
     bool IsNull() const
